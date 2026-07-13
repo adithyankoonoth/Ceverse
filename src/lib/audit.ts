@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
@@ -9,7 +10,7 @@ export type AuditInput = {
   ipAddress?: string | null;
   userAgent?: string | null;
   requestId?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonValue;
 };
 
 /**
