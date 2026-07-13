@@ -1,0 +1,859 @@
+// Ceverse — production database schema
+// Normalized, soft-deletes, optimistic locking, full-text ready, audit-friendly.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  CREATOR
+  OPERATOR
+  MANUFACTURER
+  DESIGNER
+  PACKAGING_PARTNER
+  PHOTOGRAPHER
+  LAWYER
+  MARKETING_AGENCY
+  WAREHOUSE
+  INVESTOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum VerificationType {
+  IDENTITY
+  BUSINESS
+  GST
+  COMPANY_REGISTRATION
+  FACTORY
+  ADDRESS
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  COUNTERED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum DealStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  AWAITING_APPROVAL
+  APPROVED
+  REJECTED
+  PAID
+  SKIPPED
+}
+
+enum ProjectPhase {
+  IDEA
+  RESEARCH
+  PROTOTYPE
+  SAMPLE
+  PACKAGING
+  MANUFACTURING
+  QA
+  SHIPPING
+  LAUNCH
+  POST_LAUNCH
+  REFUND_MONITORING
+  COMPLETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+enum ContractStatus {
+  DRAFT
+  IN_REVIEW
+  PENDING_SIGNATURE
+  ACTIVE
+  TERMINATED
+  SUPERSEDED
+}
+
+enum EscrowStatus {
+  PENDING
+  FUNDED
+  PARTIALLY_RELEASED
+  RELEASED
+  REFUNDED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  MEDIATION
+  RESOLVED
+  CLOSED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  DIGEST
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ---------------------------------------------------------------------------
+// Auth (Better Auth compatible tables)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  name          String
+  image         String?
+  role          UserRole  @default(CREATOR)
+  // Trust & reputation aggregate (0–100)
+  trustScore    Float     @default(50)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  version       Int       @default(1)
+
+  sessions          Session[]
+  accounts          Account[]
+  creatorProfile    CreatorProfile?
+  operatorProfile   OperatorProfile?
+  verifications     VerificationRequest[]
+  proposalsSent     Proposal[]            @relation("ProposalSender")
+  proposalsReceived Proposal[]            @relation("ProposalRecipient")
+  dealMemberships   DealMember[]
+  messages          Message[]
+  notifications     Notification[]
+  reviewsGiven      Review[]              @relation("ReviewsGiven")
+  reviewsReceived   Review[]              @relation("ReviewsReceived")
+  auditLogs         AuditLog[]
+  bookmarks         Bookmark[]
+  savedSearches     SavedSearch[]
+  disputesOpened    Dispute[]             @relation("DisputeOpener")
+  stripeAccountId   String?
+  stripeCustomerId  String?
+
+  @@index([role])
+  @@index([trustScore])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ---------------------------------------------------------------------------
+// Profiles
+// ---------------------------------------------------------------------------
+
+model CreatorProfile {
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName             String
+  bio                     String?   @db.Text
+  bannerUrl               String?
+  location                String?
+  countryCode             String?   @db.Char(2)
+  audienceSize            Int       @default(0)
+  engagementRate          Float     @default(0)
+  socialLinks             Json      @default("{}")
+  industries              String[]  @default([])
+  preferredCategories     String[]  @default([])
+  preferredPartnerships   String[]  @default([])
+  languages               String[]  @default([])
+  availability            String?
+  mediaKitUrl             String?
+  portfolioUrls           String[]  @default([])
+  pastLaunches            Json      @default("[]")
+  verificationStatus      VerificationStatus @default(UNVERIFIED)
+  searchVector            String?   @db.Text
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime?
+  version                 Int       @default(1)
+
+  @@index([countryCode])
+  @@index([audienceSize])
+  @@index([verificationStatus])
+  @@map("creator_profiles")
+}
+
+model OperatorProfile {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName           String
+  companyType           UserRole  @default(OPERATOR)
+  bio                   String?   @db.Text
+  bannerUrl             String?
+  location              String?
+  countryCode           String?   @db.Char(2)
+  employeeCount         Int?
+  factoryCount          Int?
+  certifications        String[]  @default([])
+  manufacturingCapacity String?
+  moq                   Int?
+  regionsServed         String[]  @default([])
+  hasWarehousing        Boolean   @default(false)
+  hasFulfillment        Boolean   @default(false)
+  qualityCerts          String[]  @default([])
+  portfolioUrls         String[]  @default([])
+  caseStudies           Json      @default("[]")
+  pastLaunches          Json      @default("[]")
+  successRate           Float     @default(0)
+  averageRevenue        Decimal?  @db.Decimal(14, 2)
+  averageDeliveryDays   Int?
+  priceRangeMin         Decimal?  @db.Decimal(14, 2)
+  priceRangeMax         Decimal?  @db.Decimal(14, 2)
+  industries            String[]  @default([])
+  categories            String[]  @default([])
+  verificationStatus    VerificationStatus @default(UNVERIFIED)
+  searchVector          String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+  version               Int       @default(1)
+
+  @@index([countryCode])
+  @@index([moq])
+  @@index([verificationStatus])
+  @@index([companyType])
+  @@map("operator_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Verification
+// ---------------------------------------------------------------------------
+
+model VerificationRequest {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         VerificationType
+  status       VerificationStatus @default(PENDING)
+  documents    Json               @default("[]")
+  notes        String?            @db.Text
+  reviewedById String?
+  reviewedAt   DateTime?
+  rejectionReason String?         @db.Text
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId, type])
+  @@index([status])
+  @@map("verification_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace
+// ---------------------------------------------------------------------------
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetId  String
+  targetType String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, targetId, targetType])
+  @@index([userId])
+  @@map("bookmarks")
+}
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  filters   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("saved_searches")
+}
+
+// ---------------------------------------------------------------------------
+// Proposals
+// ---------------------------------------------------------------------------
+
+model Proposal {
+  id              String         @id @default(cuid())
+  senderId        String
+  sender          User           @relation("ProposalSender", fields: [senderId], references: [id])
+  recipientId     String
+  recipient       User           @relation("ProposalRecipient", fields: [recipientId], references: [id])
+  title           String
+  summary         String         @db.Text
+  status          ProposalStatus @default(DRAFT)
+  terms           Json           @default("{}")
+  budgetMin       Decimal?       @db.Decimal(14, 2)
+  budgetMax       Decimal?       @db.Decimal(14, 2)
+  currency        String         @default("USD") @db.Char(3)
+  timelineDays    Int?
+  parentId        String?
+  parent          Proposal?      @relation("ProposalRevisions", fields: [parentId], references: [id])
+  revisions       Proposal[]     @relation("ProposalRevisions")
+  revisionNumber  Int            @default(1)
+  expiresAt       DateTime?
+  acceptedAt      DateTime?
+  dealId          String?        @unique
+  deal            Deal?          @relation(fields: [dealId], references: [id])
+  attachments     Document[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+  version         Int            @default(1)
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([status])
+  @@map("proposals")
+}
+
+// ---------------------------------------------------------------------------
+// Deals / Deal Room
+// ---------------------------------------------------------------------------
+
+model Deal {
+  id               String      @id @default(cuid())
+  title            String
+  description      String?     @db.Text
+  status           DealStatus  @default(ACTIVE)
+  phase            ProjectPhase @default(IDEA)
+  healthScore      Float?
+  riskLevel        RiskLevel?
+  riskRationale    Json        @default("[]")
+  proposal         Proposal?
+  members          DealMember[]
+  milestones       Milestone[]
+  tasks            Task[]
+  activities       Activity[]
+  messages         Message[]
+  contracts        Contract[]
+  escrows          Escrow[]
+  disputes         Dispute[]
+  documents        Document[]
+  decisions        DecisionLog[]
+  meetings         MeetingNote[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  completedAt      DateTime?
+  deletedAt        DateTime?
+  version          Int         @default(1)
+
+  @@index([status])
+  @@index([phase])
+  @@map("deals")
+}
+
+model DealMember {
+  id        String   @id @default(cuid())
+  dealId    String
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+
+  @@unique([dealId, userId])
+  @@index([userId])
+  @@map("deal_members")
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  dealId      String
+  deal        Deal            @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  title       String
+  description String?         @db.Text
+  status      MilestoneStatus @default(PENDING)
+  phase       ProjectPhase?
+  amount      Decimal?        @db.Decimal(14, 2)
+  currency    String          @default("USD") @db.Char(3)
+  dueDate     DateTime?
+  orderIndex  Int             @default(0)
+  approvedAt  DateTime?
+  paidAt      DateTime?
+  tasks       Task[]
+  documents   Document[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  version     Int             @default(1)
+
+  @@index([dealId, status])
+  @@map("milestones")
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  dealId       String
+  deal         Deal       @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  milestoneId  String?
+  milestone    Milestone? @relation(fields: [milestoneId], references: [id])
+  title        String
+  description  String?    @db.Text
+  status       TaskStatus @default(TODO)
+  assigneeId   String?
+  dueDate      DateTime?
+  orderIndex   Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  version      Int        @default(1)
+
+  @@index([dealId, status])
+  @@index([milestoneId])
+  @@map("tasks")
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  dealId    String
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  actorId   String?
+  type      String
+  summary   String
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([dealId, createdAt])
+  @@map("activities")
+}
+
+model DecisionLog {
+  id        String   @id @default(cuid())
+  dealId    String
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  actorId   String
+  title     String
+  rationale String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([dealId])
+  @@map("decision_logs")
+}
+
+model MeetingNote {
+  id        String   @id @default(cuid())
+  dealId    String
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  authorId  String
+  title     String
+  body      String   @db.Text
+  heldAt    DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dealId])
+  @@map("meeting_notes")
+}
+
+// ---------------------------------------------------------------------------
+// Contracts
+// ---------------------------------------------------------------------------
+
+model Contract {
+  id              String         @id @default(cuid())
+  dealId          String
+  deal            Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  title           String
+  status          ContractStatus @default(DRAFT)
+  content         Json
+  versionNumber   Int            @default(1)
+  parentId        String?
+  parent          Contract?      @relation("ContractVersions", fields: [parentId], references: [id])
+  versions        Contract[]     @relation("ContractVersions")
+  signatures      Signature[]
+  documents       Document[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  activatedAt     DateTime?
+  terminatedAt    DateTime?
+
+  @@index([dealId, status])
+  @@map("contracts")
+}
+
+model Signature {
+  id          String   @id @default(cuid())
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  userId      String
+  signedAt    DateTime?
+  ipAddress   String?
+  userAgent   String?
+  signatureData String? @db.Text
+  createdAt   DateTime @default(now())
+
+  @@unique([contractId, userId])
+  @@map("signatures")
+}
+
+// ---------------------------------------------------------------------------
+// Documents (versioned)
+// ---------------------------------------------------------------------------
+
+model Document {
+  id           String     @id @default(cuid())
+  title        String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  checksum     String?
+  versionNumber Int       @default(1)
+  parentId     String?
+  parent       Document?  @relation("DocVersions", fields: [parentId], references: [id])
+  versions     Document[] @relation("DocVersions")
+  uploadedById String
+  dealId       String?
+  deal         Deal?      @relation(fields: [dealId], references: [id])
+  milestoneId  String?
+  milestone    Milestone? @relation(fields: [milestoneId], references: [id])
+  proposalId   String?
+  proposal     Proposal?  @relation(fields: [proposalId], references: [id])
+  contractId   String?
+  contract     Contract?  @relation(fields: [contractId], references: [id])
+  createdAt    DateTime   @default(now())
+  deletedAt    DateTime?
+
+  @@index([dealId])
+  @@index([proposalId])
+  @@map("documents")
+}
+
+// ---------------------------------------------------------------------------
+// Escrow & Payments
+// ---------------------------------------------------------------------------
+
+model Escrow {
+  id              String       @id @default(cuid())
+  dealId          String
+  deal            Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  status          EscrowStatus @default(PENDING)
+  totalAmount     Decimal      @db.Decimal(14, 2)
+  releasedAmount  Decimal      @default(0) @db.Decimal(14, 2)
+  currency        String       @default("USD") @db.Char(3)
+  stripePaymentIntentId String?
+  payments        Payment[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([dealId, status])
+  @@map("escrows")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  escrowId        String
+  escrow          Escrow        @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+  amount          Decimal       @db.Decimal(14, 2)
+  currency        String        @default("USD") @db.Char(3)
+  status          PaymentStatus @default(PENDING)
+  type            String
+  stripeId        String?
+  metadata        Json          @default("{}")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([escrowId])
+  @@index([status])
+  @@map("payments")
+}
+
+// ---------------------------------------------------------------------------
+// Messaging
+// ---------------------------------------------------------------------------
+
+model Conversation {
+  id        String    @id @default(cuid())
+  dealId    String?   @unique
+  title     String?
+  messages  Message[]
+  members   ConversationMember[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("conversations")
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  lastReadAt     DateTime?
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@map("conversation_members")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  dealId         String?
+  deal           Deal?        @relation(fields: [dealId], references: [id])
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  body           String       @db.Text
+  attachments    Json         @default("[]")
+  parentId       String?
+  parent         Message?     @relation("Thread", fields: [parentId], references: [id])
+  replies        Message[]    @relation("Thread")
+  isPinned       Boolean      @default(false)
+  readBy         Json         @default("[]")
+  createdAt      DateTime     @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+
+  @@index([conversationId, createdAt])
+  @@index([dealId, createdAt])
+  @@map("messages")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   NotificationChannel @default(IN_APP)
+  type      String
+  title     String
+  body      String
+  href      String?
+  metadata  Json                @default("{}")
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Reputation
+// ---------------------------------------------------------------------------
+
+model Review {
+  id         String   @id @default(cuid())
+  authorId   String
+  author     User     @relation("ReviewsGiven", fields: [authorId], references: [id])
+  subjectId  String
+  subject    User     @relation("ReviewsReceived", fields: [subjectId], references: [id])
+  dealId     String?
+  rating     Int
+  categories Json     @default("{}")
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([subjectId])
+  @@index([authorId])
+  @@map("reviews")
+}
+
+model ReputationEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  dealId    String?
+  metric    String
+  delta     Float
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("reputation_events")
+}
+
+// ---------------------------------------------------------------------------
+// Disputes
+// ---------------------------------------------------------------------------
+
+model Dispute {
+  id          String        @id @default(cuid())
+  dealId      String
+  deal        Deal          @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  openedById  String
+  openedBy    User          @relation("DisputeOpener", fields: [openedById], references: [id])
+  status      DisputeStatus @default(OPEN)
+  reason      String        @db.Text
+  evidence    Json          @default("[]")
+  resolution  String?       @db.Text
+  mediatorId  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([dealId])
+  @@index([status])
+  @@map("disputes")
+}
+
+// ---------------------------------------------------------------------------
+// Analytics snapshots (pre-aggregated)
+// ---------------------------------------------------------------------------
+
+model AnalyticsSnapshot {
+  id        String   @id @default(cuid())
+  scope     String
+  scopeId   String
+  period    String
+  metrics   Json
+  createdAt DateTime @default(now())
+
+  @@unique([scope, scopeId, period])
+  @@index([scope, scopeId])
+  @@map("analytics_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// Feature flags & announcements (admin)
+// ---------------------------------------------------------------------------
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  description String?
+  enabled     Boolean  @default(false)
+  rolloutPct  Int      @default(100)
+  metadata    Json     @default("{}")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@map("feature_flags")
+}
+
+model Announcement {
+  id        String    @id @default(cuid())
+  title     String
+  body      String    @db.Text
+  active    Boolean   @default(true)
+  startsAt  DateTime  @default(now())
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("announcements")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  requestId  String?
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([resource, resourceId])
+  @@index([action])
+  @@index([requestId])
+  @@map("audit_logs")
+}
