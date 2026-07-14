@@ -1,7 +1,7 @@
 # Ceverse
 
 **The operating system for creator-led brands.**  
-A product by [Favverse](https://favverse.com).
+A product by [Favverse](https://favverse.pages.dev).
 
 Ceverse replaces Instagram DMs and verbal agreements with verified partners, structured proposals, deal rooms, contracts, escrow payments, reputation, analytics, and AI-assisted matching.
 
