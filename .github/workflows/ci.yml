@@ -40,9 +40,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Prefer deterministic install; fall back if lock drifts on the runner's npm
-          npm ci --no-audit --no-fund
-        continue-on-error: false
+          set -e
+          echo "Installing with npm ci..."
+          if ! npm ci --no-audit --no-fund; then
+            echo "::warning::npm ci failed — falling back to npm install"
+            npm install --no-audit --no-fund
+          fi
 
       - name: Generate Prisma client
         run: npx prisma generate
