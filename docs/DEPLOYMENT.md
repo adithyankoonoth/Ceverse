@@ -3,21 +3,22 @@
 ## Recommended production stack
 
 - **App:** Vercel (Next.js standalone also works in Docker)
-- **DB:** Neon PostgreSQL
+- **DB + Auth:** Supabase (Postgres + Auth + optional Storage)
 - **Redis:** Upstash or managed Redis
-- **Storage:** S3 / R2 / MinIO
-- **Email:** Resend
+- **Storage:** S3 / R2 / Supabase Storage
+- **Email:** Supabase Auth emails + Resend for product mail
 - **Payments:** Stripe Connect
 
 ## Environment
 
-Copy `.env.example` → `.env` and set real secrets.
+Copy `.env.example` → `.env` and set real secrets. See [SUPABASE.md](./SUPABASE.md).
 
 Critical:
 
-- `BETTER_AUTH_SECRET` ≥ 32 chars
-- `DATABASE_URL` (pooled) + `DIRECT_URL` (migrations)
-- `NEXT_PUBLIC_APP_URL` / `BETTER_AUTH_URL` must match public origin
+- `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (server only)
+- `DATABASE_URL` (pooler) + `DIRECT_URL` (migrations)
+- `NEXT_PUBLIC_APP_URL` must match Site URL / redirect allowlist in Supabase
 
 ## Database
 

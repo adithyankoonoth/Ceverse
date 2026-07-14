@@ -14,7 +14,7 @@ export const proposalTermsSchema = z.object({
 });
 
 export const createProposalSchema = z.object({
-  recipientId: z.string().cuid(),
+  recipientId: z.string().uuid(),
   title: z.string().min(3).max(200).trim(),
   summary: z.string().min(20).max(10000).trim(),
   budgetMin: z.number().min(0).optional(),

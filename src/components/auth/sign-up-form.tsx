@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { signUp } from "@/lib/auth-client";
+import { signUpWithPassword } from "@/lib/auth-client";
+import { completeSignUp } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { completeSignUp } from "@/app/actions/auth";
+import { Separator } from "@/components/ui/separator";
+import { GoogleButton } from "@/components/auth/google-button";
 
 const ROLES = [
   { value: "CREATOR", label: "Creator" },
@@ -36,28 +38,55 @@ export function SignUpForm() {
     const password = String(form.get("password") ?? "");
     const role = String(form.get("role") ?? "CREATOR");
 
-    const { data, error } = await signUp.email({ name, email, password });
+    const { data, error } = await signUpWithPassword({
+      email,
+      password,
+      name,
+      role,
+    });
     if (error) {
       setLoading(false);
       toast.error(error.message ?? "Sign up failed");
       return;
     }
 
-    const result = await completeSignUp({ role, userId: data?.user?.id });
+    if (data.user) {
+      const result = await completeSignUp({
+        role,
+        userId: data.user.id,
+        name,
+        email,
+      });
+      if (!result.ok) {
+        setLoading(false);
+        toast.error(result.error ?? "Could not finish onboarding");
+        return;
+      }
+    }
+
     setLoading(false);
-    if (!result.ok) {
-      toast.error(result.error ?? "Could not finish onboarding");
+
+    // Email confirmation may be required depending on Supabase settings
+    if (data.session) {
+      toast.success("Account created");
+      router.push("/dashboard");
+      router.refresh();
       return;
     }
 
-    toast.success("Account created");
-    router.push("/dashboard");
-    router.refresh();
+    toast.success("Check your email to confirm your account, then sign in.");
+    router.push("/sign-in");
   }
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="space-y-4 pt-6">
+        <GoogleButton label="Sign up with Google" />
+        <div className="flex items-center gap-3">
+          <Separator className="flex-1" />
+          <span className="text-xs text-muted-foreground">or email</span>
+          <Separator className="flex-1" />
+        </div>
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-2">
             <Label htmlFor="name">Full name</Label>

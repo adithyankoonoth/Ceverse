@@ -53,8 +53,8 @@ export const updateMilestoneSchema = z.object({
 export const createTaskSchema = z.object({
   title: z.string().min(2).max(200),
   description: z.string().max(5000).optional(),
-  milestoneId: z.string().cuid().optional(),
-  assigneeId: z.string().cuid().optional(),
+  milestoneId: z.string().min(1).max(64).optional(),
+  assigneeId: z.string().uuid().optional(),
   dueDate: z.string().datetime().optional(),
 });
 

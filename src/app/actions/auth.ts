@@ -5,12 +5,15 @@ import { writeAudit } from "@/lib/audit";
 import { OPERATOR_ROLES } from "@/domain/roles";
 import type { UserRole } from "@prisma/client";
 import { headers } from "next/headers";
+import { ensureAppUser } from "@/lib/auth";
 
 const ALLOWED = new Set<string>(["CREATOR", ...OPERATOR_ROLES]);
 
 export async function completeSignUp(input: {
   role: string;
   userId?: string;
+  name?: string;
+  email?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     if (!input.userId) {
@@ -21,9 +24,19 @@ export async function completeSignUp(input: {
     }
     const role = input.role as UserRole;
 
+    if (input.email) {
+      await ensureAppUser({
+        id: input.userId,
+        email: input.email,
+        name: input.name,
+        role: role as never,
+        emailVerified: false,
+      });
+    }
+
     await db.user.update({
       where: { id: input.userId },
-      data: { role },
+      data: { role, name: input.name || undefined },
     });
 
     if (role === "CREATOR") {
@@ -31,20 +44,27 @@ export async function completeSignUp(input: {
         where: { userId: input.userId },
         create: {
           userId: input.userId,
-          displayName: "New creator",
+          displayName: input.name?.trim() || "New creator",
         },
-        update: {},
+        update: {
+          displayName: input.name?.trim() || undefined,
+        },
       });
+      await db.operatorProfile.deleteMany({ where: { userId: input.userId } });
     } else {
       await db.operatorProfile.upsert({
         where: { userId: input.userId },
         create: {
           userId: input.userId,
-          companyName: "New company",
+          companyName: input.name?.trim() || "New company",
           companyType: role,
         },
-        update: {},
+        update: {
+          companyName: input.name?.trim() || undefined,
+          companyType: role,
+        },
       });
+      await db.creatorProfile.deleteMany({ where: { userId: input.userId } });
     }
 
     const h = await headers();

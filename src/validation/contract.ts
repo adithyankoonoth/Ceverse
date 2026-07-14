@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const createContractSchema = z.object({
-  dealId: z.string().cuid(),
+  dealId: z.string().min(1).max(64),
   title: z.string().min(3).max(200),
   content: z.object({
     revenueSharePercent: z.number().min(0).max(100).optional(),

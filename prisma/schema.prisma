@@ -145,17 +145,19 @@ enum RiskLevel {
 }
 
 // ---------------------------------------------------------------------------
-// Auth (Better Auth compatible tables)
+// Users (id = Supabase auth.users.id UUID)
+// Auth sessions/passwords/OAuth live in Supabase auth schema — not here.
 // ---------------------------------------------------------------------------
 
 model User {
-  id            String    @id @default(cuid())
+  /// Matches auth.users.id from Supabase Auth
+  id            String    @id @db.Uuid
   email         String    @unique
   emailVerified Boolean   @default(false)
   name          String
   image         String?
   role          UserRole  @default(CREATOR)
-  // Trust & reputation aggregate (0–100)
+  /// Trust & reputation aggregate (0–100)
   trustScore    Float     @default(50)
   isActive      Boolean   @default(true)
   lastLoginAt   DateTime?
@@ -164,8 +166,6 @@ model User {
   deletedAt     DateTime?
   version       Int       @default(1)
 
-  sessions          Session[]
-  accounts          Account[]
   creatorProfile    CreatorProfile?
   operatorProfile   OperatorProfile?
   verifications     VerificationRequest[]
@@ -189,60 +189,13 @@ model User {
   @@map("users")
 }
 
-model Session {
-  id        String   @id @default(cuid())
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("sessions")
-}
-
-model Account {
-  id                    String    @id @default(cuid())
-  accountId             String
-  providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  @@index([userId])
-  @@map("accounts")
-}
-
-model Verification {
-  id         String   @id @default(cuid())
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([identifier])
-  @@map("verifications")
-}
-
 // ---------------------------------------------------------------------------
 // Profiles
 // ---------------------------------------------------------------------------
 
 model CreatorProfile {
   id                      String    @id @default(cuid())
-  userId                  String    @unique
+  userId    String   @db.Uuid    @unique
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   displayName             String
   bio                     String?   @db.Text
@@ -275,7 +228,7 @@ model CreatorProfile {
 
 model OperatorProfile {
   id                    String    @id @default(cuid())
-  userId                String    @unique
+  userId    String   @db.Uuid    @unique
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyName           String
   companyType           UserRole  @default(OPERATOR)
@@ -322,13 +275,13 @@ model OperatorProfile {
 
 model VerificationRequest {
   id           String             @id @default(cuid())
-  userId       String
+  userId    String   @db.Uuid
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   type         VerificationType
   status       VerificationStatus @default(PENDING)
   documents    Json               @default("[]")
   notes        String?            @db.Text
-  reviewedById String?
+  reviewedById String?  @db.Uuid
   reviewedAt   DateTime?
   rejectionReason String?         @db.Text
   createdAt    DateTime           @default(now())
@@ -345,7 +298,7 @@ model VerificationRequest {
 
 model Bookmark {
   id        String   @id @default(cuid())
-  userId    String
+  userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   targetId  String
   targetType String
@@ -358,7 +311,7 @@ model Bookmark {
 
 model SavedSearch {
   id        String   @id @default(cuid())
-  userId    String
+  userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   filters   Json
@@ -375,9 +328,9 @@ model SavedSearch {
 
 model Proposal {
   id              String         @id @default(cuid())
-  senderId        String
+  senderId      String   @db.Uuid
   sender          User           @relation("ProposalSender", fields: [senderId], references: [id])
-  recipientId     String
+  recipientId   String   @db.Uuid
   recipient       User           @relation("ProposalRecipient", fields: [recipientId], references: [id])
   title           String
   summary         String         @db.Text
@@ -447,7 +400,7 @@ model DealMember {
   id        String   @id @default(cuid())
   dealId    String
   deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  userId    String
+  userId    String   @db.Uuid
   user      User     @relation(fields: [userId], references: [id])
   role      String   @default("member")
   joinedAt  DateTime @default(now())
@@ -490,7 +443,7 @@ model Task {
   title        String
   description  String?    @db.Text
   status       TaskStatus @default(TODO)
-  assigneeId   String?
+  assigneeId   String?  @db.Uuid
   dueDate      DateTime?
   orderIndex   Int        @default(0)
   createdAt    DateTime   @default(now())
@@ -506,7 +459,7 @@ model Activity {
   id        String   @id @default(cuid())
   dealId    String
   deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  actorId   String?
+  actorId    String?  @db.Uuid
   type      String
   summary   String
   metadata  Json     @default("{}")
@@ -520,7 +473,7 @@ model DecisionLog {
   id        String   @id @default(cuid())
   dealId    String
   deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  actorId   String
+  actorId    String   @db.Uuid
   title     String
   rationale String   @db.Text
   createdAt DateTime @default(now())
@@ -533,7 +486,7 @@ model MeetingNote {
   id        String   @id @default(cuid())
   dealId    String
   deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  authorId  String
+  authorId  String   @db.Uuid
   title     String
   body      String   @db.Text
   heldAt    DateTime
@@ -574,7 +527,7 @@ model Signature {
   id          String   @id @default(cuid())
   contractId  String
   contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  userId      String
+  userId    String   @db.Uuid
   signedAt    DateTime?
   ipAddress   String?
   userAgent   String?
@@ -600,7 +553,7 @@ model Document {
   parentId     String?
   parent       Document?  @relation("DocVersions", fields: [parentId], references: [id])
   versions     Document[] @relation("DocVersions")
-  uploadedById String
+  uploadedById String  @db.Uuid
   dealId       String?
   deal         Deal?      @relation(fields: [dealId], references: [id])
   milestoneId  String?
@@ -676,7 +629,7 @@ model ConversationMember {
   id             String       @id @default(cuid())
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  userId         String
+  userId    String   @db.Uuid
   lastReadAt     DateTime?
   joinedAt       DateTime     @default(now())
 
@@ -690,7 +643,7 @@ model Message {
   conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   dealId         String?
   deal           Deal?        @relation(fields: [dealId], references: [id])
-  senderId       String
+  senderId      String   @db.Uuid
   sender         User         @relation(fields: [senderId], references: [id])
   body           String       @db.Text
   attachments    Json         @default("[]")
@@ -714,7 +667,7 @@ model Message {
 
 model Notification {
   id        String              @id @default(cuid())
-  userId    String
+  userId    String   @db.Uuid
   user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel   NotificationChannel @default(IN_APP)
   type      String
@@ -736,9 +689,9 @@ model Notification {
 
 model Review {
   id         String   @id @default(cuid())
-  authorId   String
+  authorId  String   @db.Uuid
   author     User     @relation("ReviewsGiven", fields: [authorId], references: [id])
-  subjectId  String
+  subjectId  String   @db.Uuid
   subject    User     @relation("ReviewsReceived", fields: [subjectId], references: [id])
   dealId     String?
   rating     Int
@@ -753,7 +706,7 @@ model Review {
 
 model ReputationEvent {
   id        String   @id @default(cuid())
-  userId    String
+  userId    String   @db.Uuid
   dealId    String?
   metric    String
   delta     Float
@@ -772,13 +725,13 @@ model Dispute {
   id          String        @id @default(cuid())
   dealId      String
   deal        Deal          @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  openedById  String
+  openedById  String   @db.Uuid
   openedBy    User          @relation("DisputeOpener", fields: [openedById], references: [id])
   status      DisputeStatus @default(OPEN)
   reason      String        @db.Text
   evidence    Json          @default("[]")
   resolution  String?       @db.Text
-  mediatorId  String?
+  mediatorId  String?  @db.Uuid
   resolvedAt  DateTime?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -840,7 +793,7 @@ model Announcement {
 
 model AuditLog {
   id         String   @id @default(cuid())
-  actorId    String?
+  actorId    String?  @db.Uuid
   actor      User?    @relation(fields: [actorId], references: [id])
   action     String
   resource   String

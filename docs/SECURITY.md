@@ -4,9 +4,10 @@ Ceverse targets OWASP Top 10 controls for a high-trust commercial platform.
 
 ## Authentication
 
-- Better Auth with strong password policy (12+ chars, complexity enforced at signup)
-- HTTP-only cookies; Secure + SameSite Strict in production
-- Session expiry + cookie cache; invalidation via Better Auth session APIs
+- Supabase Auth (email/password + Google OAuth)
+- Strong password policy at signup (12+ chars, complexity)
+- HTTP-only session cookies via `@supabase/ssr`
+- Auth user id is UUID; app profile is `public.users` (synced by trigger)
 
 ## Authorization
 
@@ -33,4 +34,4 @@ Sensitive actions write to `audit_logs` (auth, payments, verification, admin).
 
 ## Secrets
 
-Never commit `.env`. Rotate `BETTER_AUTH_SECRET`, Stripe, and S3 keys regularly.
+Never commit `.env`. Rotate Supabase service role, Stripe, and S3 keys regularly.

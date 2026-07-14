@@ -2,11 +2,11 @@ import { z } from "zod";
 
 export const sendMessageSchema = z
   .object({
-    conversationId: z.string().cuid().optional(),
-    dealId: z.string().cuid().optional(),
-    recipientId: z.string().cuid().optional(),
+    conversationId: z.string().min(1).max(64).optional(),
+    dealId: z.string().min(1).max(64).optional(),
+    recipientId: z.string().uuid().optional(),
     body: z.string().min(1).max(10000).trim(),
-    parentId: z.string().cuid().optional(),
+    parentId: z.string().min(1).max(64).optional(),
     attachments: z
       .array(
         z.object({

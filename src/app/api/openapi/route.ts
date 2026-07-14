@@ -64,7 +64,8 @@ const spec = {
       cookieAuth: {
         type: "apiKey",
         in: "cookie",
-        name: "better-auth.session_token",
+        name: "sb-access-token",
+        description: "Supabase Auth session cookies (managed by @supabase/ssr)",
       },
     },
   },

@@ -1,101 +1,143 @@
+/**
+ * Seed demo users into Supabase Auth + public.users profiles.
+ * Requires: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, DATABASE_URL
+ */
 import { PrismaClient, UserRole } from "@prisma/client";
-import { hashPassword } from "better-auth/crypto";
+import { createClient } from "@supabase/supabase-js";
 
 const db = new PrismaClient();
 
-async function upsertUser(input: {
+const DEMO_PASSWORD = "CeverseDemo123!";
+
+async function ensureAuthUser(input: {
   email: string;
+  password: string;
   name: string;
   role: UserRole;
-  password: string;
-  trustScore?: number;
 }) {
-  const passwordHash = await hashPassword(input.password);
-  const user = await db.user.upsert({
-    where: { email: input.email },
-    create: {
-      email: input.email,
-      name: input.name,
-      role: input.role,
-      emailVerified: true,
-      trustScore: input.trustScore ?? 70,
-      accounts: {
-        create: {
-          accountId: input.email,
-          providerId: "credential",
-          password: passwordHash,
-        },
-      },
-    },
-    update: {
-      name: input.name,
-      role: input.role,
-      trustScore: input.trustScore ?? 70,
-    },
-  });
-
-  // Ensure credential account exists on re-seed
-  const account = await db.account.findFirst({
-    where: { userId: user.id, providerId: "credential" },
-  });
-  if (!account) {
-    await db.account.create({
-      data: {
-        userId: user.id,
-        accountId: input.email,
-        providerId: "credential",
-        password: passwordHash,
-      },
-    });
-  } else {
-    await db.account.update({
-      where: { id: account.id },
-      data: { password: passwordHash },
-    });
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error(
+      "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to seed auth users",
+    );
   }
 
-  return user;
+  const admin = createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  // Try create; if exists, look up by email via list
+  const created = await admin.auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: input.name,
+      role: input.role,
+    },
+  });
+
+  if (created.data.user) {
+    return created.data.user;
+  }
+
+  const msg = created.error?.message ?? "";
+  if (!/already|registered|exists/i.test(msg)) {
+    throw new Error(`Failed to create ${input.email}: ${msg}`);
+  }
+
+  // Find existing user (paginated)
+  let page = 1;
+  for (;;) {
+    const listed = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    const found = listed.data.users.find(
+      (u) => u.email?.toLowerCase() === input.email.toLowerCase(),
+    );
+    if (found) {
+      await admin.auth.admin.updateUserById(found.id, {
+        password: input.password,
+        email_confirm: true,
+        user_metadata: { full_name: input.name, role: input.role },
+      });
+      return found;
+    }
+    if (listed.data.users.length < 200) break;
+    page += 1;
+  }
+
+  throw new Error(`Could not create or find user ${input.email}`);
+}
+
+async function upsertProfile(
+  userId: string,
+  email: string,
+  name: string,
+  role: UserRole,
+  trustScore: number,
+) {
+  await db.user.upsert({
+    where: { id: userId },
+    create: {
+      id: userId,
+      email,
+      name,
+      role,
+      emailVerified: true,
+      trustScore,
+    },
+    update: {
+      name,
+      role,
+      emailVerified: true,
+      trustScore,
+      deletedAt: null,
+      isActive: true,
+    },
+  });
 }
 
 async function main() {
-  const password = "CeverseDemo123!";
-
-  const admin = await upsertUser({
+  const adminAuth = await ensureAuthUser({
     email: "admin@ceverse.local",
+    password: DEMO_PASSWORD,
     name: "Ceverse Admin",
     role: "SUPER_ADMIN",
-    password,
-    trustScore: 100,
   });
-
-  const creator = await upsertUser({
+  const creatorAuth = await ensureAuthUser({
     email: "creator@ceverse.local",
+    password: DEMO_PASSWORD,
     name: "Ava Chen",
     role: "CREATOR",
-    password,
-    trustScore: 82,
   });
-
-  const operator = await upsertUser({
+  const operatorAuth = await ensureAuthUser({
     email: "operator@ceverse.local",
+    password: DEMO_PASSWORD,
     name: "Nova Manufacturing",
     role: "MANUFACTURER",
-    password,
-    trustScore: 88,
   });
-
-  const designer = await upsertUser({
+  const designerAuth = await ensureAuthUser({
     email: "designer@ceverse.local",
+    password: DEMO_PASSWORD,
     name: "Studio North",
     role: "DESIGNER",
-    password,
-    trustScore: 76,
   });
 
+  await upsertProfile(adminAuth.id, "admin@ceverse.local", "Ceverse Admin", "SUPER_ADMIN", 100);
+  await upsertProfile(creatorAuth.id, "creator@ceverse.local", "Ava Chen", "CREATOR", 82);
+  await upsertProfile(
+    operatorAuth.id,
+    "operator@ceverse.local",
+    "Nova Manufacturing",
+    "MANUFACTURER",
+    88,
+  );
+  await upsertProfile(designerAuth.id, "designer@ceverse.local", "Studio North", "DESIGNER", 76);
+
   await db.creatorProfile.upsert({
-    where: { userId: creator.id },
+    where: { userId: creatorAuth.id },
     create: {
-      userId: creator.id,
+      userId: creatorAuth.id,
       displayName: "Ava Chen",
       bio: "Lifestyle creator building a clean-beauty brand with 1.2M engaged followers.",
       location: "Los Angeles, US",
@@ -107,7 +149,10 @@ async function main() {
       preferredPartnerships: ["revenue_share", "equity"],
       languages: ["en"],
       verificationStatus: "VERIFIED",
-      socialLinks: { instagram: "https://instagram.com/ava", tiktok: "https://tiktok.com/@ava" },
+      socialLinks: {
+        instagram: "https://instagram.com/ava",
+        tiktok: "https://tiktok.com/@ava",
+      },
     },
     update: {
       verificationStatus: "VERIFIED",
@@ -116,9 +161,9 @@ async function main() {
   });
 
   await db.operatorProfile.upsert({
-    where: { userId: operator.id },
+    where: { userId: operatorAuth.id },
     create: {
-      userId: operator.id,
+      userId: operatorAuth.id,
       companyName: "Nova Manufacturing Co.",
       companyType: "MANUFACTURER",
       bio: "ISO-certified cosmetics manufacturer specializing in clean formulations and US fulfillment.",
@@ -145,9 +190,9 @@ async function main() {
   });
 
   await db.operatorProfile.upsert({
-    where: { userId: designer.id },
+    where: { userId: designerAuth.id },
     create: {
-      userId: designer.id,
+      userId: designerAuth.id,
       companyName: "Studio North",
       companyType: "DESIGNER",
       bio: "Packaging and brand systems for premium DTC launches.",
@@ -184,15 +229,14 @@ async function main() {
     update: { enabled: true },
   });
 
-  // Demo proposal + deal if none
   const existing = await db.proposal.findFirst({
-    where: { senderId: creator.id, recipientId: operator.id },
+    where: { senderId: creatorAuth.id, recipientId: operatorAuth.id },
   });
   if (!existing) {
-    const proposal = await db.proposal.create({
+    await db.proposal.create({
       data: {
-        senderId: creator.id,
-        recipientId: operator.id,
+        senderId: creatorAuth.id,
+        recipientId: operatorAuth.id,
         title: "Clean serum production partnership",
         summary:
           "Looking for a verified manufacturer to produce a vitamin-C serum with US fulfillment, 5k first run, 15% revenue share, and 90-day QA window.",
@@ -211,16 +255,15 @@ async function main() {
         expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       },
     });
-    console.log("Seeded proposal", proposal.id);
   }
 
   console.log("Seed complete");
-  console.log("Demo password for all users:", password);
+  console.log("Demo password:", DEMO_PASSWORD);
   console.log({
-    admin: admin.email,
-    creator: creator.email,
-    operator: operator.email,
-    designer: designer.email,
+    admin: "admin@ceverse.local",
+    creator: "creator@ceverse.local",
+    operator: "operator@ceverse.local",
+    designer: "designer@ceverse.local",
   });
 }
 

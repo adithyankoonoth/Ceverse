@@ -4,7 +4,7 @@ import { matchOperatorsForCreator, scorePair } from "@/services/matching.service
 import { z } from "zod";
 
 const bodySchema = z.object({
-  operatorUserId: z.string().cuid().optional(),
+  operatorUserId: z.string().uuid().optional(),
   productCategory: z.string().max(80).optional(),
   budget: z.number().min(0).optional(),
   limit: z.number().int().min(1).max(50).optional(),

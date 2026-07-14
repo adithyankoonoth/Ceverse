@@ -5,9 +5,10 @@ const serverSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().optional(),
-  BETTER_AUTH_SECRET: z.string().min(16),
-  BETTER_AUTH_URL: z.string().url().optional(),
   NEXT_PUBLIC_APP_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
@@ -23,6 +24,8 @@ const serverSchema = z.object({
 
 const publicSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().optional(),
 });
 
@@ -37,9 +40,10 @@ function readProcessEnv(): Record<string, string | undefined> {
     DATABASE_URL: process.env.DATABASE_URL,
     DIRECT_URL: process.env.DIRECT_URL,
     REDIS_URL: process.env.REDIS_URL,
-    BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
-    BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
@@ -54,11 +58,6 @@ function readProcessEnv(): Record<string, string | undefined> {
   };
 }
 
-/**
- * Validate and return server env. Cached after first successful parse.
- * In development without DATABASE_URL/BETTER_AUTH_SECRET, uses safe defaults
- * so tooling can import modules; production always requires real values.
- */
 export function getEnv(): ServerEnv {
   if (cached) return cached;
 
@@ -69,11 +68,16 @@ export function getEnv(): ServerEnv {
     ...raw,
     DATABASE_URL:
       raw.DATABASE_URL ??
-      (isProd ? undefined : "postgresql://user:password@localhost:5432/ceverse?schema=public"),
-    BETTER_AUTH_SECRET:
-      raw.BETTER_AUTH_SECRET ??
-      (isProd ? undefined : "dev-only-secret-change-me-32chars!!"),
+      (isProd
+        ? undefined
+        : "postgresql://postgres:postgres@localhost:5432/postgres?schema=public"),
     NEXT_PUBLIC_APP_URL: raw.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    NEXT_PUBLIC_SUPABASE_URL:
+      raw.NEXT_PUBLIC_SUPABASE_URL ??
+      (isProd ? undefined : "http://127.0.0.1:54321"),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY:
+      raw.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+      (isProd ? undefined : "dev-anon-key-replace-me"),
   };
 
   const parsed = serverSchema.safeParse(withDefaults);
@@ -89,6 +93,8 @@ export function getPublicEnv(): PublicEnv {
   const env = getEnv();
   return publicSchema.parse({
     NEXT_PUBLIC_APP_URL: env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_SUPABASE_URL: env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
   });
 }

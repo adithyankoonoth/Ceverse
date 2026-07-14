@@ -3,16 +3,19 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { signIn } from "@/lib/auth-client";
+import { signInWithPassword } from "@/lib/auth-client";
 import { safeRedirectPath } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { GoogleButton } from "@/components/auth/google-button";
 
 export function SignInForm() {
   const router = useRouter();
   const search = useSearchParams();
+  const next = safeRedirectPath(search.get("next"));
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -22,20 +25,26 @@ export function SignInForm() {
     const email = String(form.get("email") ?? "");
     const password = String(form.get("password") ?? "");
 
-    const { error } = await signIn.email({ email, password });
+    const { error } = await signInWithPassword(email, password);
     setLoading(false);
     if (error) {
       toast.error(error.message ?? "Sign in failed");
       return;
     }
     toast.success("Signed in");
-    router.push(safeRedirectPath(search.get("next")));
+    router.push(next);
     router.refresh();
   }
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardContent className="space-y-4 pt-6">
+        <GoogleButton nextPath={next} />
+        <div className="flex items-center gap-3">
+          <Separator className="flex-1" />
+          <span className="text-xs text-muted-foreground">or email</span>
+          <Separator className="flex-1" />
+        </div>
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
@@ -56,7 +65,7 @@ export function SignInForm() {
               type="password"
               autoComplete="current-password"
               required
-              minLength={12}
+              minLength={8}
               maxLength={128}
             />
           </div>

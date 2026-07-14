@@ -17,7 +17,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { signOut } from "@/lib/auth-client";
+import { signOut as supabaseSignOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Role } from "@/lib/rbac";
@@ -98,7 +98,10 @@ export function AppShell({
           <Button
             variant="ghost"
             className="w-full justify-start gap-2 text-muted-foreground"
-            onClick={() => signOut({ fetchOptions: { onSuccess: () => { window.location.href = "/"; } } })}
+            onClick={async () => {
+              await supabaseSignOut();
+              window.location.href = "/";
+            }}
           >
             <LogOut className="h-4 w-4" />
             Sign out

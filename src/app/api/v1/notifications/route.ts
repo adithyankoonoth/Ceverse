@@ -22,7 +22,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await requireSession();
     const body = z
-      .object({ ids: z.array(z.string().cuid()).optional() })
+      .object({ ids: z.array(z.string().min(1).max(64)).optional() })
       .parse(await request.json().catch(() => ({})));
     const result = await markNotificationsRead(session.user.id, body.ids);
     return jsonOk(result);

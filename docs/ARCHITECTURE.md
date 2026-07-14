@@ -19,14 +19,15 @@ Clean Architecture + feature-oriented modules:
 
 ## Auth & authorization
 
-- **Better Auth** email/password (min 12 chars), HTTP-only cookies, SameSite strict in production.
-- Middleware performs a cheap session-cookie gate for protected shells.
+- **Supabase Auth** — email/password + Google OAuth (`@supabase/ssr`).
+- Middleware refreshes session cookies and gates protected shells.
 - Real authorization is server-side via `requireSession` + RBAC (`src/lib/rbac.ts`).
+- `auth.users` (Supabase) syncs to `public.users` via SQL trigger + `ensureAppUser` fallback.
 - Admin routes require `ADMIN` / `SUPER_ADMIN`.
 
 ## Data
 
-- PostgreSQL via Prisma (Neon-ready with pooled `DATABASE_URL` + `DIRECT_URL`).
+- PostgreSQL on **Supabase** via Prisma (`DATABASE_URL` pooler + `DIRECT_URL`).
 - Soft deletes (`deletedAt`), optimistic locking (`version`), audit log table.
 - Full-text ready string fields on profiles for future `tsvector` indexes / Meilisearch.
 
@@ -63,7 +64,8 @@ These are pure functions (unit-tested) so ranking stays auditable.
 
 ```
 Browser → Next.js (RSC + Route Handlers + Server Actions)
-            ├─ Prisma → PostgreSQL (Neon)
+            ├─ Supabase Auth (email + Google)
+            ├─ Prisma → Supabase Postgres
             ├─ Redis → rate limits + BullMQ
             ├─ Stripe Connect
             ├─ Resend
