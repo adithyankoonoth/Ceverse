@@ -27,17 +27,6 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### Demo accounts (after seed)
-
-Password for all: `CeverseDemo123!`
-
-| Email | Role |
-|-------|------|
-| admin@ceverse.local | Super Admin |
-| creator@ceverse.local | Creator |
-| operator@ceverse.local | Manufacturer |
-| designer@ceverse.local | Designer |
-
 ## Scripts
 
 | Script | Purpose |
