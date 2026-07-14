@@ -37,6 +37,8 @@ function write(level: LogLevel, message: string, context?: LogContext): void {
   } else if (level === "warn") {
     console.warn(line);
   } else {
+    // Structured info/debug logs — intentional console usage
+    // eslint-disable-next-line no-console
     console.log(line);
   }
 }

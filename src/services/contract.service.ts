@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/domain/errors";
+import { ConflictError, NotFoundError } from "@/domain/errors";
 import { assertDealMember } from "@/services/deal.service";
 import type { createContractSchema, signContractSchema } from "@/validation/contract";
 import type { z } from "zod";
